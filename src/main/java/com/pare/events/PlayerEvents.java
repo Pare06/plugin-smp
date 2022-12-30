@@ -3,6 +3,8 @@ package com.pare.events;
 import com.pare.Main;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Enderman;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -46,7 +48,10 @@ public class PlayerEvents implements Listener {
 
             for (var enderman : endermen1_3) {
                 Collections.shuffle(players);
-                ((Enderman)enderman).setTarget(players.get(0));
+                Enderman eman = (Enderman)enderman;
+                eman.setTarget(players.get(0));
+                AttributeInstance attribute = eman.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE);
+                attribute.setBaseValue(attribute.getBaseValue() * 2/3);
             }
         }, 20 * 10, 20 * 30);
     }

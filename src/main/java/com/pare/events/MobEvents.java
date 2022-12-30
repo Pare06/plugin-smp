@@ -18,7 +18,10 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.metadata.FixedMetadataValue;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
 
 public class MobEvents implements Listener {
@@ -37,11 +40,11 @@ public class MobEvents implements Listener {
         }
 
         AttributeInstance attribute = mob.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        attribute.setBaseValue(attribute.getBaseValue() * 2);
-        mob.setHealth(mob.getHealth() * 2);
+        attribute.setBaseValue(attribute.getBaseValue() * 3);
+        mob.setHealth(mob.getHealth() * 3);
 
         for (Player pl : Bukkit.getOnlinePlayers()) {
-            pl.playSound(pl.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, (float) 0.5F, (float)0.5);
+            pl.playSound(pl.getLocation(), Sound.ENTITY_WARDEN_HEARTBEAT, 0.5F, 0.5F);
         }
 
         BossBar bar = Bukkit.createBossBar("Warden", BarColor.RED, BarStyle.SOLID, BarFlag.PLAY_BOSS_MUSIC);
@@ -63,6 +66,17 @@ public class MobEvents implements Listener {
                 bar.removeAll();
             }
         }, 0, 10);
+
+        Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
+            List<Entity> nearPlayers = mob.getNearbyEntities(15, 15, 15).stream().filter(p -> p.getType() == EntityType.PLAYER).toList();
+            Collections.shuffle(nearPlayers);
+
+            if (nearPlayers.size() == 0) {
+                nearPlayers = mob.getNearbyEntities(200, 200, 200).stream().filter(p -> p.getType() == EntityType.PLAYER).toList();
+            }
+
+            ((Mob)mob).setTarget((LivingEntity)nearPlayers.get(0));
+        }, 10 * 20, 10 * 20);
     }
 
     private int witherTaskId;
@@ -115,6 +129,8 @@ public class MobEvents implements Listener {
         }
     }
 
+    private int dragonHPTaskId;
+
     @EventHandler
     public void onEndLoadEvent(PlayerPortalEvent event) {
         if (event.getTo().getWorld().getEnvironment() != World.Environment.THE_END) {
@@ -125,9 +141,30 @@ public class MobEvents implements Listener {
             EnderDragon dragon = event.getTo().getWorld().getEnderDragonBattle().getEnderDragon();
 
             AttributeInstance attribute = dragon.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-            attribute.setBaseValue(600);
-            dragon.setHealth(600);
+            attribute.setBaseValue(1000);
+            dragon.setHealth(1000);
         }
+
+        dragonHPTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
+            EnderDragon dragon = event.getTo().getWorld().getEnderDragonBattle().getEnderDragon();
+
+            AttributeInstance attribute = dragon.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+            if (!Main.hasZombieSpawned && attribute.getBaseValue() <= 300) {
+                Zombie zombie = (Zombie)Bukkit.getWorld("world_the_end").spawnEntity(
+                    new Location(Bukkit.getWorld("world_the_end"), 0, 100, 0 ), EntityType.ZOMBIE
+                );
+
+                Main.hasZombieSpawned = true;
+                zombie.getAttribute(Attribute.GENERIC_MAX_HEALTH).setBaseValue(100);
+                zombie.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).setBaseValue(zombie.getAttribute(Attribute.GENERIC_MOVEMENT_SPEED).getBaseValue() * 2);
+                zombie.getAttribute(Attribute.GENERIC_FOLLOW_RANGE).setBaseValue(1000);
+                zombie.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(15);
+                zombie.setHealth(100);
+                zombie.setMetadata("custom_mob", new FixedMetadataValue(Main.plugin, true));
+            }
+
+            Bukkit.getScheduler().cancelTask(dragonHPTaskId);
+        }, 0, 1 * 20);
     }
 
     @EventHandler
@@ -138,16 +175,33 @@ public class MobEvents implements Listener {
         }
 
         if (event.getEntityType() == EntityType.ENDER_CRYSTAL) {
-            Bukkit.getScheduler().scheduleSyncDelayedTask(Main.plugin, () -> deathPos.getWorld().spawnEntity(deathPos, EntityType.ENDER_CRYSTAL), 20 * 60);
+            Bukkit.getScheduler().scheduleSyncDelayedTask(Main.plugin, () -> {
+                Bukkit.getWorld("world_the_end").spawnEntity(deathPos, EntityType.LIGHTNING);
+                Bukkit.getScheduler().scheduleSyncDelayedTask(Main.plugin, () -> {
+                    deathPos.getWorld().spawnEntity(deathPos, EntityType.ENDER_CRYSTAL);
+                }, 20 * 1);
+            }, 20 * 60);
         }
     }
 
     @EventHandler
-    public void onWardenFall(EntityDamageEvent event) {
-        if (event.getEntityType() == EntityType.WARDEN) {
-            switch (event.getCause()) {
-                case FALL, FALLING_BLOCK, CRAMMING, DROWNING, FIRE -> event.setCancelled(true);
-            }
+    public void onEntityDamage(EntityDamageEvent event) {
+        switch (event.getEntityType()) {
+            case WARDEN:
+                switch (event.getCause()) {
+                    case FALL, FALLING_BLOCK, CRAMMING, DROWNING, FIRE -> event.setCancelled(true);
+                }
+                break;
+            case ENDER_DRAGON:
+                switch (event.getCause()) {
+                    case ENTITY_EXPLOSION, BLOCK_EXPLOSION -> event.setCancelled(true);
+                }
+                break;
+            case ZOMBIE:
+                if (event.getEntity().hasMetadata("custom_mob") && event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+                    event.setCancelled(true);
+                }
+                break;
         }
     }
 }

@@ -12,6 +12,7 @@ public class Main extends JavaPlugin {
     public static ArrayList<String> teleported;
 
     public static DragonFight dragonFight;
+    public static boolean hasZombieSpawned;
 
     public enum DragonFight {
         ACTIVE,
@@ -24,6 +25,7 @@ public class Main extends JavaPlugin {
         teleported = new ArrayList<>();
 
         dragonFight = DragonFight.INACTIVE;
+        hasZombieSpawned = false;
 
         Helpers.registerCraftingRecipes();
 
