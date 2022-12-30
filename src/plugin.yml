@@ -1,0 +1,18 @@
+name: dio_bastardo
+version: 1.0.4
+api-version: 1.19
+main: com.pare.Main
+
+commands:
+  continent:
+    usage: /continent
+  resethealth:
+    usage: /resethealth
+  withdrawheart:
+    usage: /withdrawheart
+  collect:
+    usage: /collect
+  exit:
+    usage: /exit
+  # unload:
+    # usage: /unload <nether/end>
