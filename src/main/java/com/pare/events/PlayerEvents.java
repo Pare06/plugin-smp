@@ -14,6 +14,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -27,9 +28,26 @@ public class PlayerEvents implements Listener {
     public void onPlayerPortal(PlayerPortalEvent event) {
         World world = event.getTo().getWorld();
 
-        if (world.getEnvironment() != World.Environment.THE_END
+        /*if (world.getEnvironment() != World.Environment.THE_END
         ||  world.getPlayers().size() > 0
         ||  Main.dragonFight == Main.DragonFight.ACTIVE) {
+            return;
+        }*/
+
+        if (world.getEnvironment() != World.Environment.THE_END) {
+            return;
+        }
+
+        // event.getPlayer().performCommand("music play smp2");
+        int[] taskId = new int[] { 0 };
+        taskId[0] = Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
+            event.getPlayer().performCommand("music play smp2");
+            if (Main.dragonFight == Main.DragonFight.INACTIVE) {
+                Bukkit.getScheduler().cancelTask(taskId[0]);
+            }
+        }, 0, (2 * 60 + 35) * 20);
+
+        if (world.getPlayers().size() > 0 || Main.dragonFight == Main.DragonFight.INACTIVE) {
             return;
         }
 
@@ -41,10 +59,11 @@ public class PlayerEvents implements Listener {
             }
 
             List<LivingEntity> endermen = world.getLivingEntities().stream().filter(x -> x.getType() == EntityType.ENDERMAN).toList();
-            Collections.shuffle(endermen);
             List<LivingEntity> endermen1_3 = endermen.subList(0, Math.round((float)endermen.size() / 3 - 2));
 
-            List<Player> players = world.getPlayers();
+            List<Player> _players = world.getPlayers();
+
+            List<Player> players = new ArrayList<>(_players);
 
             for (var enderman : endermen1_3) {
                 Collections.shuffle(players);

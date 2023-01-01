@@ -1,10 +1,7 @@
 package com.pare.events;
 
 import com.pare.Main;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Sound;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.boss.BarColor;
@@ -17,9 +14,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
+import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -67,19 +68,27 @@ public class MobEvents implements Listener {
             }
         }, 0, 10);
 
-        Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
-            List<Entity> nearPlayers = mob.getNearbyEntities(15, 15, 15).stream().filter(p -> p.getType() == EntityType.PLAYER).toList();
+        wardenTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
+            List<Entity> _nearPlayers = mob.getNearbyEntities(30, 10, 30).stream().filter(p -> p.getType() == EntityType.PLAYER).toList();
+            List<Entity> nearPlayers = new ArrayList<>(_nearPlayers);
             Collections.shuffle(nearPlayers);
 
             if (nearPlayers.size() == 0) {
                 nearPlayers = mob.getNearbyEntities(200, 200, 200).stream().filter(p -> p.getType() == EntityType.PLAYER).toList();
             }
 
-            ((Mob)mob).setTarget((LivingEntity)nearPlayers.get(0));
+            for (var pl : nearPlayers) {
+                ((Warden)mob).setAnger(pl, 0);
+            }
+            ((Warden)mob).setAnger(nearPlayers.get(0), 100);
+
+            if (mob.isDead()) {
+                Bukkit.getScheduler().cancelTask(wardenTaskId);
+            }
         }, 10 * 20, 10 * 20);
     }
 
-    private int witherTaskId;
+    private int witherTaskId, wardenTaskId;
 
     @EventHandler
     public void onWitherSpawn(CreatureSpawnEvent event) {
@@ -148,8 +157,7 @@ public class MobEvents implements Listener {
         dragonHPTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
             EnderDragon dragon = event.getTo().getWorld().getEnderDragonBattle().getEnderDragon();
 
-            AttributeInstance attribute = dragon.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-            if (!Main.hasZombieSpawned && attribute.getBaseValue() <= 300) {
+            if (!Main.hasZombieSpawned && dragon.getHealth() <= 500) {
                 Zombie zombie = (Zombie)Bukkit.getWorld("world_the_end").spawnEntity(
                     new Location(Bukkit.getWorld("world_the_end"), 0, 100, 0 ), EntityType.ZOMBIE
                 );
@@ -160,12 +168,41 @@ public class MobEvents implements Listener {
                 zombie.getAttribute(Attribute.GENERIC_FOLLOW_RANGE).setBaseValue(1000);
                 zombie.getAttribute(Attribute.GENERIC_ATTACK_DAMAGE).setBaseValue(15);
                 zombie.setHealth(100);
-                zombie.setMetadata("custom_mob", new FixedMetadataValue(Main.plugin, true));
-            }
+                zombie.setCustomName("Ender Guardian");
 
-            Bukkit.getScheduler().cancelTask(dragonHPTaskId);
+                EntityEquipment equip = zombie.getEquipment();
+
+                equip.setHelmet(new ItemStack(Material.OBSIDIAN));
+                equip.setChestplate(new ItemStack(Material.NETHERITE_CHESTPLATE));
+                equip.setLeggings(new ItemStack(Material.NETHERITE_LEGGINGS));
+                equip.setBoots(new ItemStack(Material.NETHERITE_BOOTS));
+
+                zombie.setMetadata("custom_mob", new FixedMetadataValue(Main.plugin, true));
+
+                BossBar bar = Bukkit.createBossBar("Ender Guardian", BarColor.RED, BarStyle.SOLID);
+                bar.setVisible(true);
+                bar.setProgress(zombie.getHealth() / zombie.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue());
+                for (var pl : Bukkit.getOnlinePlayers()) {
+                    bar.addPlayer(pl);
+                }
+
+                zombieBarTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(Main.plugin, () -> {
+                    bar.setProgress(zombie.getHealth() / zombie.getAttribute(Attribute.GENERIC_MAX_HEALTH).getBaseValue());
+                    for (var pl : Bukkit.getOnlinePlayers()) {
+                        bar.addPlayer(pl);
+                    }
+                    if (zombie.isDead()) {
+                        bar.removeAll();
+                        Bukkit.getScheduler().cancelTask(zombieBarTaskId);
+                    }
+                }, 0, 10);
+
+                Bukkit.getScheduler().cancelTask(dragonHPTaskId);
+            }
         }, 0, 1 * 20);
     }
+
+    private int zombieBarTaskId;
 
     @EventHandler
     public void onCrystalKill(EntityDamageEvent event) {
@@ -198,10 +235,23 @@ public class MobEvents implements Listener {
                 }
                 break;
             case ZOMBIE:
-                if (event.getEntity().hasMetadata("custom_mob") && event.getCause() == EntityDamageEvent.DamageCause.FALL) {
-                    event.setCancelled(true);
+                if (event.getEntity().hasMetadata("custom_mob")) {
+                    switch (event.getCause()) {
+                        case FALL -> event.setCancelled(true);
+                    }
                 }
                 break;
+        }
+    }
+
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        if (event.getEntityType() == EntityType.ENDER_DRAGON) {
+            Main.dragonFight = Main.DragonFight.INACTIVE;
+
+            for (var player : Bukkit.getWorld("world_the_end").getPlayers()) {
+                player.performCommand("music stop");
+            }
         }
     }
 }
